@@ -8,21 +8,21 @@ Run the `numble_solver.py` script on the command line, passing in the target num
 
 A successful example:
 
-    ```
-    $ python numble_solver.py 741 100 3 5 7 10 25 100
-    100 - 25 = 75
-    75 × 10 = 750
-    750 - 7 = 743
-    743 - 5 = 738
-    738 + 3 = 741
-    ```
+```console
+$ python numble_solver.py 741 100 3 5 7 10 25 100
+100 - 25 = 75
+75 × 10 = 750
+750 - 7 = 743
+743 - 5 = 738
+738 + 3 = 741
+```
 
 An unsuccessful example:
 
-    ```
-    $ python numble_solver.py 733 2 4 5 10 25 100
-    No solution found.
-    ```
+```console
+$ python numble_solver.py 733 2 4 5 10 25 100
+No solution found.
+```
 
 ## Requirements
 The requirements are only used for development.  You can install them as follows.
