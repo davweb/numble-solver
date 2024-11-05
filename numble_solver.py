@@ -34,6 +34,9 @@ class Step:
             and self.op == other.op \
             and self.right == other.right
 
+    def __hash__(self) -> int:
+        return hash((self.value, self.left, self.op, self.right))
+
     def __lt__(self, other) -> int:
         if self.value != other.value:
             return self.value < other.value
@@ -41,15 +44,28 @@ class Step:
         if len(self) != len(other):
             return len(self) < len(other)
 
-        return self.depth() < other.depth()
+        return self.operations() < other.operations()
 
-    def depth(self) -> int:
-        """How many levels deep does this step go?"""
+    def operations(self) -> tuple[int, int, int, int]:
+        """
+        Return the number of each operation in the step
+        """
 
         if self.left is None or self.op is None or self.right is None:
-            return 0
+            return 0, 0, 0, 0
 
-        return 1 + max(self.left.depth(), self.right.depth())
+        div, mul, sub, add = [left + right for left, right in zip(self.left.operations(), self.right.operations())]
+
+        if self.op == '+':
+            add += 1
+        elif self.op == '-':
+            sub += 1
+        elif self.op == '×':
+            mul += 1
+        elif self.op == '÷':
+            div += 1
+
+        return div, mul, sub, add
 
     def __len__(self) -> int:
         if self.left is None or self.op is None or self.right is None:
@@ -109,14 +125,14 @@ def operations(numbers: list[Step]) -> Iterable[Step]:
             yield left / right
 
 
-def solve(target: int, numbers: list[Step], results: list[Step]) -> None:
+def solve(target: int, numbers: list[Step], results: set[Step]) -> None:
     """
     Recursively solve a Numble puzzle
     """
 
     for replacement in operations(numbers):
         if replacement.value == target:
-            results.append(replacement)
+            results.add(replacement)
         else:
             if replacement.left is None or replacement.right is None:
                 raise ValueError('Invalid replacement')
@@ -154,7 +170,7 @@ def solve_puzzle(target: int, numbers: list[int]) -> Step | None:
     if target in numbers:
         return Step(target)
 
-    results: list[Step] = []
+    results: set[Step] = set()
 
     solve(target, [Step(n) for n in numbers], results)
 
