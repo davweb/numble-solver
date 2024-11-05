@@ -52,20 +52,21 @@ class Step:
         """
 
         if self.left is None or self.op is None or self.right is None:
-            return 0, 0, 0, 0
+            return (0, 0, 0, 0)
 
         div, mul, sub, add = [left + right for left, right in zip(self.left.operations(), self.right.operations())]
 
-        if self.op == '+':
-            add += 1
-        elif self.op == '-':
-            sub += 1
-        elif self.op == '×':
-            mul += 1
-        elif self.op == '÷':
-            div += 1
+        match self.op:
+            case '+':
+                add += 1
+            case '-':
+                sub += 1
+            case'×':
+                mul += 1
+            case '÷':
+                div += 1
 
-        return div, mul, sub, add
+        return (div, mul, sub, add)
 
     def __len__(self) -> int:
         if self.left is None or self.op is None or self.right is None:
