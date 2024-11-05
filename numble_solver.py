@@ -3,127 +3,165 @@
 Solve https://numble.wtf puzzles
 """
 
-from typing import Iterable
+from typing import Iterable, cast
 import itertools
 import sys
 
-#  A Step is number and the history of how we got there
-type Step = int | tuple[int, int | tuple[Step, str, Step]]
+
+class Step:
+    """A step is a number and the calculation that produced it"""
+
+    def __init__(self, value: int, _left=None, _op=None, _right=None) -> None:
+        self.value = value
+        self.left: Step | None = _left
+        self.op: str | None = _op
+        self.right: Step | None = _right
+        self._normalize()
+
+    def _normalize(self) -> None:
+        if self.left is None or self.op is None or self.right is None:
+            return
+
+        if self.op in ('+', '×') and self.left < self.right:
+            self.left, self.right = self.right, self.left
+
+    def __eq__(self, other) -> bool:
+        if other is None:
+            return False
+
+        return self.value == other.value \
+            and self.left == other.left \
+            and self.op == other.op \
+            and self.right == other.right
+
+    def __lt__(self, other) -> int:
+        if self.value != other.value:
+            return self.value < other.value
+
+        if len(self) != len(other):
+            return len(self) < len(other)
+
+        return self.depth() < other.depth()
+
+    def depth(self) -> int:
+        """How many levels deep does this step go?"""
+
+        if self.left is None or self.op is None or self.right is None:
+            return 0
+
+        return 1 + max(self.left.depth(), self.right.depth())
+
+    def __len__(self) -> int:
+        if self.left is None or self.op is None or self.right is None:
+            return 1
+
+        return len(self.left) + len(self.right)
+
+    def __str__(self) -> str:
+        """Convert to a string using as few parentheses as possible"""
+
+        if self.left is None or self.op is None or self.right is None:
+            return str(self.value)
+
+        left_str = str(self.left)
+        right_str = str(self.right)
+
+        if self.left.op in ('+', '-') and self.op in ('×', '÷'):
+            left_str = f'({left_str})'
+
+        if (self.op == '÷' and self.right.op is not None) or (self.op in ('×', '-') and self.right.op in ('+', '-')):
+            right_str = f'({right_str})'
+
+        return f'{left_str} {self.op} {right_str}'
+
+    def __add__(self, other):
+        return Step(self.value + other.value, self, '+', other)
+
+    def __sub__(self, other):
+        return Step(self.value - other.value, self, '-', other)
+
+    def __mul__(self, other):
+        return Step(self.value * other.value, self, '×', other)
+
+    def __truediv__(self, other):
+        return Step(self.value // other.value, self, '÷', other)
 
 
-def operations(numbers: list[Step]) -> Iterable[tuple[Step, Step, tuple[int, Step]]]:
+def operations(numbers: list[Step]) -> Iterable[Step]:
     """
     Return the possible operations between all the Steps in a list
     """
 
     for left, right in itertools.combinations(numbers, 2):
-        if left[0] < right[0]:
-            left, right = right, left
-
-        yield (left, right, (left[0] + right[0], (left[1], '+', right[1])))
+        yield left + right
 
         # No need to multiply by 1
-        if left[0] != 1 and right[0] != 1:
-            yield (left, right, (left[0] * right[0], (left[1], '×', right[1])))
+        if left.value != 1 and right.value != 1:
+            yield left * right
 
     for left, right in itertools.permutations(numbers, 2):
         # Numble puzzles don't seem to use negative numbers as part of the solution and zero is no use
-        if left[0] > right[0]:
-            yield (left, right, (left[0] - right[0], (left[1], '-', right[1])))
+        if left.value > right.value:
+            yield left - right
 
         # No need to divide by 1 and no fractions
-        if right[0] != 1 and left[0] % right[0] == 0:
-            yield (left, right, (left[0] // right[0], (left[1], '÷', right[1])))
+        if right.value != 1 and left.value % right.value == 0:
+            yield left / right
 
 
-def solve(target: int, numbers: list[Step], results) -> str | None:
+def solve(target: int, numbers: list[Step], results: list[Step]) -> None:
     """
     Recursively solve a Numble puzzle
     """
 
-    for left, right, replacement in operations(numbers):
-        if replacement[0] == target:
-            results.add(replacement[1])
+    for replacement in operations(numbers):
+        if replacement.value == target:
+            results.append(replacement)
+        else:
+            if replacement.left is None or replacement.right is None:
+                raise ValueError('Invalid replacement')
 
-        next_numbers = [n for n in numbers if n not in (left, right)] + [replacement]
-        solve(target, next_numbers, results)
+            next_numbers = numbers + [replacement]
+            next_numbers.remove(replacement.left)
+            next_numbers.remove(replacement.right)
+            solve(target, next_numbers, results)
 
 
-def solve_puzzle(target: int, numbers: list[int]) -> str | None:
+def solve_puzzle(target: int, numbers: list[int]) -> Step | None:
     """
     Solve a Numble puzzle
 
-    >>> solve_puzzle(375, [5, 75])
+    >>> str(solve_puzzle(375, [5, 75]))
     '75 × 5'
-    >>> solve_puzzle(80, [5, 75])
+    >>> str(solve_puzzle(80, [5, 75]))
     '75 + 5'
-    >>> solve_puzzle(15, [5, 75])
+    >>> str(solve_puzzle(15, [5, 75]))
     '75 ÷ 5'
-    >>> solve_puzzle(70, [5, 75])
+    >>> str(solve_puzzle(70, [5, 75]))
     '75 - 5'
-    >>> solve_puzzle(14, [7, 7])
+    >>> str(solve_puzzle(14, [7, 7]))
     '7 + 7'
-    >>> solve_puzzle(7, [1, 2, 7, 75])
+    >>> str(solve_puzzle(28, [7, 7, 7, 7]))
+    '7 + 7 + 7 + 7'
+    >>> str(solve_puzzle(7, [1, 2, 7, 75]))
     '7'
-    >>> solve_puzzle(876, {25, 100, 50, 75, 10, 3})
+    >>> str(solve_puzzle(876, {25, 100, 50, 75, 10, 3}))
     '(75 - 100 ÷ 50) × (25 - (10 + 3))'
-    >>> solve_puzzle (591, {3, 8, 10, 25, 50, 100})
+    >>> str(solve_puzzle (591, {3, 8, 10, 25, 50, 100}))
     '(50 - 8) × (10 + 100 ÷ 25) + 3'
     """
 
     if target in numbers:
-        return str(target)
+        return Step(target)
 
-    results = set()
-    solve(target, [(n, n) for n in numbers], results)
+    results: list[Step] = []
 
-    def sort_key(expression):
-        return expression_length(expression), expression_depth(expression), format_expression(expression)
+    solve(target, [Step(n) for n in numbers], results)
 
     if results:
-        return format_expression(sorted(results, key=sort_key)[0])
+        return cast(list[Step], sorted(results))[0]
 
     return None
-
-
-def format_expression(expression):
-    """Convert an expression in nested tuples to a string, using as few brackets as possible"""
-
-    if isinstance(expression, int):
-        return str(expression)
-
-    left, op, right = expression
-    left_op = None if isinstance(left, int) else left[1]
-    right_op = None if isinstance(right, int) else right[1]
-
-    left_str = format_expression(left)
-    right_str = format_expression(right)
-
-    if left_op in ('+', '-') and op in ('×', '÷'):
-        left_str = f'({left_str})'
-
-    if (op == '÷' and right_op is not None) or (op in ('×', '-') and right_op in  ('+', '-')):
-        right_str = f'({right_str})'
-
-    return f'{left_str} {op} {right_str}'
-
-
-def expression_length(expression):
-    """Count the number of elements an expression"""
-    if isinstance(expression, int):
-        return 1
-
-    return expression_length(expression[0]) + expression_length(expression[2])
-
-
-def expression_depth(expression):
-    """Calculate the nesting of an expression"""
-    if isinstance(expression, int):
-        return 0
-
-    left_depth = 1 + expression_depth(expression[0])
-    right_depth = 1 + expression_depth(expression[2])
-    return max(left_depth, right_depth)
 
 
 def main() -> None:
